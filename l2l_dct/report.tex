@@ -1,0 +1,198 @@
+% ================== СЕМЕСТРОВЫЙ ПРОЕКТ ==================
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{geometry}
+\geometry{left=25mm,right=15mm,top=20mm,bottom=20mm}
+
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{booktabs}
+
+\graphicspath{{output/}}
+
+\lstset{
+  language=Python,
+  basicstyle=\footnotesize\ttfamily,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{red},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  frame=single,
+  breaklines=true,
+}
+
+\begin{document}
+
+\thispagestyle{empty}
+\begin{center}
+МИНИСТЕРСТВО ОБРАЗОВАНИЯ РЕСПУБЛИКИ БЕЛАРУСЬ\\[0.5em]
+Учреждение образования\\[0.5em]
+\textbf{<<Белорусский государственный университет информатики и радиоэлектроники>>}\\[2em]
+Факультет компьютерных систем и сетей\\[0.5em]
+Кафедра электронных вычислительных средств
+\end{center}
+
+\vspace{2em}
+\begin{center}
+\textbf{ОТЧЁТ}\\[0.5em]
+по семестровому проекту\\[0.5em]
+по дисциплине\\[0.5em]
+\textbf{<<Встраиваемые системы обработки изображений для задач мультимедиа>>}\\[1em]
+\textbf{Тема: <<Система сжатия данных L2L на основе блочной лестничной параметризации ДКП--ОДКП>>}
+\end{center}
+
+\vspace{3em}
+\hfill\begin{minipage}{0.55\textwidth}
+Выполнил:\\
+магистрант 1 курса магистратуры\\
+факультета компьютерных систем и сетей\\
+группы 556301\\[0.3em]
+\textbf{Лебедевич Артём Владимирович}\\[1.2em]
+Преподаватель:\\
+доцент кафедры ЭВС, канд. техн. наук\\
+\textbf{Ключеня Виталий Васильевич}
+\end{minipage}
+
+\vfill
+\begin{center}
+Минск, 2026~г.
+\end{center}
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Цель работы}
+
+Разработать программную и аппаратную модели системы трансформационного кодирования изображений по схеме \textbf{L2L} (lossless-to-lossy) на основе блочной лестничной структурной параметризации прямого и обратного дискретного косинусного преобразования (ДКП--ОДКП) с использованием арифметики с фиксированной запятой и алгоритма ДКП с минимальной вычислительной сложностью (Лофлер, 11 умножений). Продемонстрировать эффект <<шахматной доски>> и его устранение с помощью информационного SIB-блока.
+
+\section{Теоретические сведения}
+
+\subsection{Схема L2L}
+
+Схема L2L объединяет режимы сжатия \textit{lossless} (без потерь) и \textit{lossy} (с контролируемыми артефактами) в едином трансформаторе. Требования: обратимость <<целое к целому>>, фиксированная запятая, перфективная реконструкция при наличии side information.
+
+\subsection{Блочная лестничная параметризация}
+
+Полифазная матрица банка фильтров представляется каскадом блоков лестничной структуры. Для ДКП--ОДКП используются параллельные диагональные преобразования:
+\begin{equation}
+\begin{bmatrix} y_0 \\ y_1 \end{bmatrix}
+=
+\mathrm{round}\left(
+\begin{bmatrix} C & 0 \\ 0 & D \end{bmatrix}
+\begin{bmatrix} x_0 \\ x_1 \end{bmatrix}
++
+\begin{bmatrix} 0 \\ s \end{bmatrix}
+\right),
+\end{equation}
+где $C$ --- матрица ДКП-II, $D$ --- матрица ОДКП-III ($D = C^\mathsf{T}$).
+
+\subsection{Эффект <<шахматной доски>>}
+
+Утечка постоянной составляющей (DC leakage) в фильтрах ОДКП приводит к потере регулярности 1-го порядка и появлению блочной сетки на реконструированном изображении. Для устранения используется \textbf{SIB-блок} (Side Information Block):
+\begin{equation}
+s_i = D \cdot s_{i-1}, \quad s_0 = 0.
+\end{equation}
+В режиме lossless передаётся $s_n$; в режиме lossy --- не передаётся.
+
+\subsection{Алгоритм Лофлера}
+
+Восьмиточечное ДКП-II реализуется за 11 умножений и 29 сложений (табл.~5.1 методички). Двумерное преобразование --- separable: строки, затем столбцы.
+
+\section{Архитектура системы}
+
+Проект размещён в каталоге \texttt{l2l\_dct/}. Основные модули:
+\begin{itemize}
+\item \texttt{python/dct/} --- ДКП/ОДКП (reference + Loeffler);
+\item \texttt{python/ladder/} --- лестничная параметризация, SIB;
+\item \texttt{python/l2l/} --- анализ, синтез, кодек;
+\item \texttt{fpga/hls/} --- HLS-ядро для Pynq;
+\item \texttt{matlab/} --- сверка fixed-point.
+\end{itemize}
+
+Формат fixed-point: Q16.16 для коэффициентов; узел округления ladder --- потеря младших 15 бит дробной части.
+
+\section{Ход работы}
+
+\subsection{Фаза 1: ДКП/ОДКП}
+
+Реализованы матричный эталон и separable 2-D DCT/IDCT. Проверка: max ошибка Loeffler vs матрица $< 10^{-10}$ (float). Fixed-point round-trip 2-D: PSNR $> 55$~dB.
+
+\subsection{Фаза 2: Эффект <<шахматной доски>>}
+
+Изображение $512 \times 512$ разбивается на подполосы $\xi$ и $s$ (верхняя/нижняя половины). Для каждого блока $8 \times 8$:
+\begin{itemize}
+\item прямой путь: $y_i = \mathrm{C2D}(\xi)$, $t_i = \mathrm{D2D}(s)$ с округлением;
+\item обратный путь без SIB: ошибки округления $\Rightarrow$ блочная сетка;
+\item с SIB: side\_y, side\_t восстанавливают точные коэффициенты.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{phase2_chessboard.png}
+\caption{Реконструкция: исходное / без SIB / с SIB (аналог рис.~5.15 методички)}
+\end{figure}
+
+\subsection{Фаза 3--4: L2L кодек}
+
+Lossless: кодирование $y_i$, $t_i$, SIB (zlib). Lossy: per-band квантование JPEG-матрицы, без SIB. Построен график rate--distortion.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{phase4_rate_distortion.png}
+\caption{Rate--distortion характеристика L2L lossy}
+\end{figure}
+
+\subsection{Фаза 5: FPGA (Pynq)}
+
+HLS-модуль \texttt{loeffler\_dct\_8pt.cpp}: ap\_fixed$<$16,6$>$, pipeline II=1. Testbench сверяет результат с golden vector из Python. Драйвер Pynq: \texttt{l2l\_driver.py}, notebook \texttt{l2l\_overlay.ipynb}.
+
+\section{Результаты}
+
+\begin{table}[H]
+\centering
+\caption{Метрики на тестовом изображении $512 \times 512$}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Режим & MSE & PSNR, dB \\
+\midrule
+Без SIB (analysis--synthesis) & $\approx 3.5 \times 10^{-2}$ & $\approx 62.7$ \\
+С SIB (lossless) & $0$ & $\infty$ \\
+2-D DCT round-trip (fixed) & $< 10^{-2}$ & $> 55$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+На реконструированном изображении без SIB наблюдается характерная <<шахматная>> блочная структура; с SIB --- bit-exact восстановление.
+
+\section{Выводы}
+
+\begin{enumerate}
+\item Реализована L2L-система сжатия на базе блочной лестничной параметризации ДКП--ОДКП с fixed-point арифметикой.
+\item Подтверждено проявление эффекта <<шахматной доски>> при отсутствии SIB и его полное устранение при передаче side information.
+\item Разработано HLS-ядро 8-точечного ДКП для Pynq и организована верификация по golden vectors.
+\item Система поддерживает переключение lossless/lossy одним пайплайном.
+\end{enumerate}
+
+\section*{Приложение: запуск}
+
+\begin{lstlisting}
+cd l2l_dct
+python3 run_phase2_chessboard.py
+python3 tests/test_sib_chessboard.py
+\end{lstlisting}
+
+\end{document}
